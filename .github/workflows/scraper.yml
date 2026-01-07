@@ -3,11 +3,13 @@ name: Weekly Events Scraper
 on:
   schedule:
     - cron: "0 4 * * 1"   # Monday 04:00 UTC
-  workflow_dispatch:      # manual trigger button
+  workflow_dispatch:
 
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repo
@@ -32,8 +34,17 @@ jobs:
         run: |
           python scrape_events.py
 
-      - name: Upload CSV outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: scraped-csvs
-          path: output/*.csv
+      - name: Commit CSV outputs to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add output/*.csv || true
+
+          if git diff --cached --quiet; then
+            echo "No CSV changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update CSV outputs"
+          git push
