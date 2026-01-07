@@ -60,3 +60,14 @@ jobs:
 
           git commit -m "Update CSV outputs"
           git push
+          
+      - name: DEBUG – show files written by scraper
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          echo "=== Repo root ==="
+          ls -la
+          echo "=== Output directory ==="
+          ls -la output || echo "❌ output directory does not exist"
+          echo "=== Find CSV files anywhere ==="
+          find . -name "*.csv" -maxdepth 3
