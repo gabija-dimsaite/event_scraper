@@ -5,6 +5,7 @@ import asyncio
 import json
 import re
 import unicodedata
+import os
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
