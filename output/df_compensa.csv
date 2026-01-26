@@ -1,10 +1,6 @@
 ﻿event_name,location,city,date,time,event_link
-OPERETĖ ''BRAŠKIAI IR BRAŠKIENĖS'',Compensa koncertų salė,Vilnius,2026-01-24,20:00,https://www.compensakoncertusale.lt/renginiai/operete-braskiai-ir-braskienes
-(Vilnius) Mažasis Princas,Compensa koncertų salė,Vilnius,2026-01-25,12:00,https://www.compensakoncertusale.lt/renginiai/vilnius-mazasis-princas-0
-(Vilnius) Mažasis Princas,Compensa koncertų salė,Vilnius,2026-01-25,16:00,https://www.compensakoncertusale.lt/renginiai/vilnius-mazasis-princas-1
-Teatro komedija UOŠVIS,Compensa koncertų salė,Vilnius,2026-01-27,19:00,https://www.compensakoncertusale.lt/renginiai/teatro-komedija-uosvis-3
-Romeo&Juliet Catalan Flamenco Ballet,Compensa koncertų salė,Vilnius,2026-01-28,19:00,https://www.compensakoncertusale.lt/renginiai/romeojuliet-catalan-flamenco-ballet
-A|CH premjera ''KARALIŲ PASAKA'',Compensa koncertų salė,Vilnius,2026-01-29,19:00,https://www.compensakoncertusale.lt/renginiai/ach-premjera-karaliu-pasaka-vilnius
+Romeo&Juliet Catalan Flamenco Ballet,Compensa koncertų salė,Vilnius,2026-01-28,19:00,https://www.compensakoncertusale.lt/renginiai/teatro-komedija-uosvis-3
+A|CH premjera ''KARALIŲ PASAKA'',Compensa koncertų salė,Vilnius,2026-01-29,19:00,https://www.compensakoncertusale.lt/renginiai/romeojuliet-catalan-flamenco-ballet
 (ATŠAUKTA) ELTON JOHN TRIBUTE SHOW ULTIMATE ELTON,Compensa koncertų salė,Vilnius,2026-01-31,19:00,https://www.compensakoncertusale.lt/renginiai/atsaukta-elton-john-tribute-show-ultimate-elton
 Šventinis Bankuchenas ir Taukaplaukiai,Compensa koncertų salė,Vilnius,2026-01-31,20:00,https://www.compensakoncertusale.lt/renginiai/sventinis-bankuchenas-ir-taukaplaukiai
 Teatro komedija PORŲ TERAPIJA,Compensa koncertų salė,Vilnius,2026-02-08,18:00,https://www.compensakoncertusale.lt/renginiai/teatro-komedija-poru-terapija-0
@@ -17,10 +13,11 @@ Sakartvelo nacionalinis baletas ''Sukhishvili'',Compensa koncertų salė,Vilnius
 World Hits Symphony | Universe Orchestra,Compensa koncertų salė,Vilnius,2026-03-01,19:00,https://www.compensakoncertusale.lt/renginiai/world-hits-symphony-universe-orchestra
 ASMIK GRIGORIAN / A DIVA IS BORN,Compensa koncertų salė,Vilnius,2026-03-03,19:00,https://www.compensakoncertusale.lt/renginiai/asmik-grigorian-diva-born
 DOMINO teatras | miuziklas PARYŽIAUS KATEDRA,Compensa koncertų salė,Vilnius,2026-03-06,19:00,https://www.compensakoncertusale.lt/renginiai/domino-teatras-miuziklas-paryziaus-katedra-vilnius-1
-Michael Schenker - My Years With UFO 2026,Compensa koncertų salė,Vilnius,2026-03-09,20:00,https://www.compensakoncertusale.lt/renginiai/2-metrai-deivis-norvilas-ir-rafailas-karpis
-A|CH premjera ''KARALIŲ PASAKA'',Compensa koncertų salė,Vilnius,2026-03-11,14:00,https://www.compensakoncertusale.lt/renginiai/michael-schenker-my-years-ufo-2026
-A|CH premjera ''KARALIŲ PASAKA'',Compensa koncertų salė,Vilnius,2026-03-11,19:00,https://www.compensakoncertusale.lt/renginiai/ach-premjera-karaliu-pasaka
-A|CH SPEKTAKLIS ''JAUNYSTĖ'',Compensa koncertų salė,Vilnius,2026-03-12,19:00,https://www.compensakoncertusale.lt/renginiai/ach-premjera-karaliu-pasaka-vilnius-0
+2 METRAI: Deivis Norvilas ir Rafailas Karpis,Compensa koncertų salė,Vilnius,2026-03-08,18:00,https://www.compensakoncertusale.lt/renginiai/2-metrai-deivis-norvilas-ir-rafailas-karpis
+Michael Schenker - My Years With UFO 2026,Compensa koncertų salė,Vilnius,2026-03-09,20:00,https://www.compensakoncertusale.lt/renginiai/michael-schenker-my-years-ufo-2026
+A|CH premjera ''KARALIŲ PASAKA'',Compensa koncertų salė,Vilnius,2026-03-11,14:00,https://www.compensakoncertusale.lt/renginiai/ach-premjera-karaliu-pasaka
+A|CH premjera ''KARALIŲ PASAKA'',Compensa koncertų salė,Vilnius,2026-03-11,19:00,https://www.compensakoncertusale.lt/renginiai/ach-premjera-karaliu-pasaka-vilnius-0
+SPEKTAKLIS IŠGIJIMAS,Compensa koncertų salė,Vilnius,2026-03-13,19:00,https://www.compensakoncertusale.lt/renginiai/spektaklis-isgijimas
 Maksimas Galkinas – jubiliejinis turas,Compensa koncertų salė,Vilnius,2026-03-17,19:00,https://www.compensakoncertusale.lt/renginiai/maksimas-galkinas-jubiliejinis-turas-0
 Teatro komedija PORŲ TERAPIJA,Compensa koncertų salė,Vilnius,2026-03-19,19:00,https://www.compensakoncertusale.lt/renginiai/teatro-komedija-poru-terapija
 Manifestation Live Show su Roxie Nafousi,Compensa koncertų salė,Vilnius,2026-03-20,19:00,https://www.compensakoncertusale.lt/renginiai/manifestation-live-show-su-roxie-nafousi
@@ -35,9 +32,9 @@ A|CH premjera ''KARALIŲ PASAKA'',Compensa koncertų salė,Vilnius,2026-04-07,19
 A|CH premjera ''KARALIŲ PASAKA'',Compensa koncertų salė,Vilnius,2026-04-08,19:00,https://www.compensakoncertusale.lt/renginiai/ach-premjera-karaliu-pasaka-vilnius-1
 A|CH SPEKTAKLIS ''JAUNYSTĖ'',Compensa koncertų salė,Vilnius,2026-04-09,19:00,https://www.compensakoncertusale.lt/renginiai/ach-spektaklis-jaunyste-vilnius-1
 Biplan 30 | Gimtadienio koncertas!,Compensa koncertų salė,Vilnius,2026-04-11,20:00,https://www.compensakoncertusale.lt/renginiai/biplan-30-gimtadienio-koncertas
+LORDS OF THE SOUND (Ennio Morricone by Lords of the Sound),Compensa koncertų salė,Vilnius,2026-04-12,19:00,https://www.compensakoncertusale.lt/renginiai/anime-sympho-show-38-samurai-vilnius
 The Music of Hans Zimmer and Others,Compensa koncertų salė,Vilnius,2026-04-22,15:00,https://www.compensakoncertusale.lt/renginiai/lords-sound-ennio-morricone-lords-sound
 Dark Side of The Moon & The Wall - In Concert,Compensa koncertų salė,Vilnius,2026-04-22,20:00,https://www.compensakoncertusale.lt/renginiai/music-hans-zimmer-and-others
-Baletas ''Snieguolė ir Septyni Nykštukai'',Compensa koncertų salė,Vilnius,2026-05-01,12:00,https://www.compensakoncertusale.lt/renginiai/baletas-snieguole-ir-septyni-nykstukai-1
-The Shoop Shoop Show - The Cher Collection,Compensa koncertų salė,Vilnius,2026-05-10,20:00,https://www.compensakoncertusale.lt/renginiai/shoop-shoop-show-cher-collection-vilnius
-Of Monsters And Men | The Mouse Parade Tour,Compensa koncertų salė,Vilnius,2026-06-16,20:00,https://www.compensakoncertusale.lt/renginiai/tori-amos-times-dragons
+The Shoop Shoop Show - The Cher Collection,Compensa koncertų salė,Vilnius,2026-05-10,20:00,https://www.compensakoncertusale.lt/renginiai/baletas-snieguole-ir-septyni-nykstukai-1
+Of Monsters And Men | The Mouse Parade Tour,Compensa koncertų salė,Vilnius,2026-06-16,20:00,https://www.compensakoncertusale.lt/renginiai/shoop-shoop-show-cher-collection-vilnius
 JodokCello,Compensa koncertų salė,Vilnius,2026-12-05,19:00,https://www.compensakoncertusale.lt/renginiai/jodokcello
