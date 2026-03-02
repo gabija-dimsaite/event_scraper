@@ -49,8 +49,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git status
-
           git add output/*.csv || true
 
           if git diff --cached --quiet; then
@@ -59,8 +57,12 @@ jobs:
           fi
 
           git commit -m "Update CSV outputs"
-          git push
-          
+
+          # Pull latest remote changes (like manually added markdown files)
+          git pull --rebase --autostash origin main
+
+          git push origin main
+
       - name: DEBUG – show files written by scraper
         run: |
           echo "=== Current directory ==="
