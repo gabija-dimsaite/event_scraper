@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-# Imports
 import asyncio
 import json
 import re
 import unicodedata
-import os
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -27,7 +25,6 @@ def report_rows(df_name: str, df: pd.DataFrame) -> None:
 
 def report_saved(path: Path) -> None:
     print(f"Saved: {path.as_posix()}")
-
 
 # Bilietai.lt
 async def scrape_bilietai_lt(pages_to_check: int = 6) -> pd.DataFrame:
@@ -876,57 +873,221 @@ def scrape_zalgirioarena() -> pd.DataFrame:
         .reset_index(drop=True)
     )
 
+# Kultūros uostas - Klaipedos miesto renginiai
+def scrape_kulturosuostas_festivaliai(months_forward: int = 6) -> pd.DataFrame:
+    BASE_URL = "https://kulturosuostas.lt"
+    AJAX_URL = f"{BASE_URL}/wp-admin/admin-ajax.php"
+
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": f"{BASE_URL}/renginiai-klaipedoje/",
+    }
+
+    FESTIVAL_LABEL_ID = "3203"
+    CALENDAR_ID = "724"
+
+    TIME_RANGE_RE = re.compile(r"^\d{1,2}:\d{2}\s*(?:-|–)\s*\d{1,2}:\d{2}$")
+    TIME_SINGLE_RE = re.compile(r"^\d{1,2}:\d{2}$")
+    ALL_DAY_RE = re.compile(r"^vis", re.IGNORECASE)
+
+    MONTH_HEADER_RE = re.compile(
+        r"(sausio|vasario|kovo|balandžio|gegužės|birželio|liepos|rugpjūčio|rugsėjo|spalio|lapkričio|gruodžio)\s+renginiai",
+        re.IGNORECASE
+    )
+
+    def looks_like_time(s: str) -> bool:
+        s = (s or "").strip()
+        return bool(TIME_RANGE_RE.match(s) or TIME_SINGLE_RE.match(s) or ALL_DAY_RE.match(s))
+
+    def is_month_header(s: str) -> bool:
+        s = (s or "").strip().lower()
+        return ("renginiai" in s and MONTH_HEADER_RE.search(s) is not None) or s.endswith("renginiai")
+
+    def iter_future_months(start: datetime, months_forward: int):
+        y0, m0 = start.year, start.month
+        for i in range(months_forward):
+            y = y0 + (m0 - 1 + i) // 12
+            m = (m0 - 1 + i) % 12 + 1
+            yield y, m
+
+    def safe_event_date(year: int, month: int, day: int):
+        try:
+            return datetime(year, month, day)
+        except ValueError:
+            return None
+
+    def smallest_container_with_single_h4(h4):
+        node = h4
+        while node and getattr(node, "name", None) not in ("body", "html"):
+            if getattr(node, "name", None) in ("div", "li", "article", "section"):
+                if len(node.find_all("h4")) == 1:
+                    return node
+            node = node.parent
+        return h4.parent
+
+    def extract_time_and_venue(container, event_name: str):
+        strings = list(container.stripped_strings)
+        if not strings:
+            return None, None
+
+        title_idx = None
+        for i, s in enumerate(strings):
+            if s == event_name:
+                title_idx = i
+                break
+        if title_idx is None:
+            for i, s in enumerate(strings):
+                if event_name and event_name in s:
+                    title_idx = i
+                    break
+        if title_idx is None:
+            title_idx = 0
+
+        time_text = None
+        for s in strings[:title_idx]:
+            if looks_like_time(s):
+                time_text = s
+
+        venue_text = None
+        for s in strings[title_idx + 1:]:
+            if not s or s == event_name:
+                continue
+            if looks_like_time(s):
+                continue
+            if is_month_header(s):
+                continue
+            if s.strip().lower() == "festivaliai":
+                continue
+            venue_text = s
+            break
+
+        return time_text, venue_text
+
+    today = datetime.today()
+    events = []
+
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    for year, month in iter_future_months(today.replace(day=1), months_forward):
+        payload = {
+            "action": "mec_full_calendar_switch_skin",
+            "skin": "monthly",
+            "atts[id]": CALENDAR_ID,
+            "atts[skin]": "full_calendar",
+            "atts[sf_status]": "1",
+            "sf[label]": FESTIVAL_LABEL_ID,
+            "sf[year]": str(year),
+            "sf[month]": str(month),
+            "sf[event_status]": "all",
+            "apply_sf_date": "1",
+        }
+
+        r = session.post(AJAX_URL, data=payload, timeout=20)
+        r.raise_for_status()
+
+        soup = BeautifulSoup(r.text, "html.parser")
+        current_day = None
+
+        for el in soup.find_all(["h3", "h4"]):
+            if el.name == "h3":
+                t = el.get_text(strip=True)
+                current_day = int(t) if t.isdigit() else None
+                continue
+
+            a = el.find("a", href=True)
+            if not a or not current_day:
+                continue
+
+            event_name = a.get_text(strip=True)
+            if not event_name:
+                continue
+
+            link = a["href"]
+            if link and not link.startswith("http"):
+                link = BASE_URL + link
+
+            event_dt = safe_event_date(year, month, current_day)
+            if not event_dt:
+                continue
+
+            if event_dt.date() < today.date():
+                continue
+
+            container = smallest_container_with_single_h4(el)
+            time_text, venue_text = extract_time_and_venue(container, event_name)
+
+            if venue_text and is_month_header(venue_text):
+                venue_text = None
+
+            events.append({
+                "event_name": event_name,
+                "location": venue_text,
+                "city": "Klaipėda",
+                "date": event_dt.strftime("%Y-%m-%d"),
+                "time": time_text,
+                "event_link": link,
+            })
+
+    df = pd.DataFrame(events)
+
+    if df.empty:
+        return df
+
+    return (
+        df.drop_duplicates(subset=["event_name", "date", "event_link"])
+        .sort_values(["date", "time", "event_name"], na_position="last")
+        .reset_index(drop=True)
+    )
 
 async def main() -> None:
     out_dir = Path("output")
 
-    # Bilietai.lt
     df_bilietai_lt = await scrape_bilietai_lt(pages_to_check=6)
     report_rows("df_bilietai_lt", df_bilietai_lt)
     save_df(df_bilietai_lt, out_dir / "df_bilietai_lt.csv")
     report_saved(out_dir / "df_bilietai_lt.csv")
 
-    # Twinsbet Arena
     df_twinsbet = scrape_twinsbet()
     report_rows("df_twinsbet", df_twinsbet)
     save_df(df_twinsbet, out_dir / "df_twinsbet.csv")
     report_saved(out_dir / "df_twinsbet.csv")
 
-    # Kakava.lt
     df_kakava_lt = await scrape_kakava_lt(scroll_rounds=20)
     report_rows("df_kakava_lt", df_kakava_lt)
     save_df(df_kakava_lt, out_dir / "df_kakava_lt.csv")
     report_saved(out_dir / "df_kakava_lt.csv")
 
-    # Šiaulių Arena
     df_siauliuarena = scrape_siauliuarena()
     report_rows("df_siauliuarena", df_siauliuarena)
     save_df(df_siauliuarena, out_dir / "df_siauliuarena.csv")
     report_saved(out_dir / "df_siauliuarena.csv")
 
-    # Kalnapilio Arena
     df_kalnapilioarena = scrape_kalnapilioarena()
     report_rows("df_kalnapilioarena", df_kalnapilioarena)
     save_df(df_kalnapilioarena, out_dir / "df_kalnapilioarena.csv")
     report_saved(out_dir / "df_kalnapilioarena.csv")
 
-    # Švyturio Arena
     df_svyturioarena = scrape_svyturioarena()
     report_rows("df_svyturioarena", df_svyturioarena)
     save_df(df_svyturioarena, out_dir / "df_svyturioarena.csv")
     report_saved(out_dir / "df_svyturioarena.csv")
 
-    # Compensa
     df_compensa = scrape_compensa(pages_to_check=6)
     report_rows("df_compensa", df_compensa)
     save_df(df_compensa, out_dir / "df_compensa.csv")
     report_saved(out_dir / "df_compensa.csv")
 
-    # Žalgirio Arena
     df_zalgirioarena = scrape_zalgirioarena()
     report_rows("df_zalgirioarena", df_zalgirioarena)
     save_df(df_zalgirioarena, out_dir / "df_zalgirioarena.csv")
     report_saved(out_dir / "df_zalgirioarena.csv")
+
+    df_kulturosuostas_festivaliai = scrape_kulturosuostas_festivaliai(months_forward=6)
+    report_rows("df_kulturosuostas_festivaliai", df_kulturosuostas_festivaliai)
+    save_df(df_kulturosuostas_festivaliai, out_dir / "df_kulturosuostas_festivaliai.csv")
+    report_saved(out_dir / "df_kulturosuostas_festivaliai.csv")
 
 
 if __name__ == "__main__":
