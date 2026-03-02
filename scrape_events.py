@@ -1044,50 +1044,59 @@ def scrape_kulturosuostas_festivaliai(months_forward: int = 6) -> pd.DataFrame:
 async def main() -> None:
     out_dir = Path("output")
 
+    # Bilietai.lt
     df_bilietai_lt = await scrape_bilietai_lt(pages_to_check=6)
     report_rows("df_bilietai_lt", df_bilietai_lt)
     save_df(df_bilietai_lt, out_dir / "df_bilietai_lt.csv")
     report_saved(out_dir / "df_bilietai_lt.csv")
 
+    # Twinsbet Arena
     df_twinsbet = scrape_twinsbet()
     report_rows("df_twinsbet", df_twinsbet)
     save_df(df_twinsbet, out_dir / "df_twinsbet.csv")
     report_saved(out_dir / "df_twinsbet.csv")
 
+    # Kakava.lt
     df_kakava_lt = await scrape_kakava_lt(scroll_rounds=20)
     report_rows("df_kakava_lt", df_kakava_lt)
     save_df(df_kakava_lt, out_dir / "df_kakava_lt.csv")
     report_saved(out_dir / "df_kakava_lt.csv")
 
+    # Šiaulių Arena
     df_siauliuarena = scrape_siauliuarena()
     report_rows("df_siauliuarena", df_siauliuarena)
     save_df(df_siauliuarena, out_dir / "df_siauliuarena.csv")
     report_saved(out_dir / "df_siauliuarena.csv")
 
+    # Kalnapilio Arena
     df_kalnapilioarena = scrape_kalnapilioarena()
     report_rows("df_kalnapilioarena", df_kalnapilioarena)
     save_df(df_kalnapilioarena, out_dir / "df_kalnapilioarena.csv")
     report_saved(out_dir / "df_kalnapilioarena.csv")
 
+    # Švyturio Arena
     df_svyturioarena = scrape_svyturioarena()
     report_rows("df_svyturioarena", df_svyturioarena)
     save_df(df_svyturioarena, out_dir / "df_svyturioarena.csv")
     report_saved(out_dir / "df_svyturioarena.csv")
 
+    # Compensa
     df_compensa = scrape_compensa(pages_to_check=6)
     report_rows("df_compensa", df_compensa)
     save_df(df_compensa, out_dir / "df_compensa.csv")
     report_saved(out_dir / "df_compensa.csv")
 
+    # Žalgirio Arena
     df_zalgirioarena = scrape_zalgirioarena()
     report_rows("df_zalgirioarena", df_zalgirioarena)
     save_df(df_zalgirioarena, out_dir / "df_zalgirioarena.csv")
     report_saved(out_dir / "df_zalgirioarena.csv")
 
-    df_kulturosuostas_festivaliai = scrape_kulturosuostas_festivaliai(months_forward=6)
-    report_rows("df_kulturosuostas_festivaliai", df_kulturosuostas_festivaliai)
-    save_df(df_kulturosuostas_festivaliai, out_dir / "df_kulturosuostas_festivaliai.csv")
-    report_saved(out_dir / "df_kulturosuostas_festivaliai.csv")
+    # Kultūros uostas - Klaipedos miesto renginiai
+    df_klaipeda = scrape_kulturosuostas_festivaliai()
+    report_rows("df_klaipeda", df_klaipeda)
+    save_df(df_klaipeda, out_dir / "df_klaipeda.csv")
+    report_saved(out_dir / "df_klaipeda.csv")
 
 
 if __name__ == "__main__":
