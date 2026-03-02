@@ -59,7 +59,8 @@ jobs:
           fi
 
           git commit -m "Update CSV outputs"
-          git push
+          git pull --rebase origin main
+          git push origin main
           
       - name: DEBUG – show files written by scraper
         run: |
