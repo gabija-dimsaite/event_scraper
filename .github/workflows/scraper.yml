@@ -58,7 +58,7 @@ jobs:
           python scrape_events.py
 
       # -----------------------
-      # Debug: show output files
+      # Debug (optional but useful)
       # -----------------------
       - name: Show output files (debug)
         run: |
@@ -77,9 +77,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 🔥 Always sync first to avoid non-fast-forward
-          git pull --rebase origin main
-
           # Stage CSV files
           git add output/*.csv || true
 
@@ -89,5 +86,11 @@ jobs:
             exit 0
           fi
 
+          # Commit changes
           git commit -m "Update CSV outputs"
+
+          # Rebase safely on latest remote
+          git pull --rebase origin main
+
+          # Push
           git push origin main
