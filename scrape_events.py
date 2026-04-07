@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 import unicodedata
 from datetime import datetime
@@ -26,276 +25,118 @@ def report_rows(df_name: str, df: pd.DataFrame) -> None:
 def report_saved(path: Path) -> None:
     print(f"Saved: {path.as_posix()}")
 
-# Bilietai.lt
+# BILIETAI.LT
 async def scrape_bilietai_lt(pages_to_check: int = 6) -> pd.DataFrame:
-    base_url = (
-        "https://www.bilietai.lt/eng/tickets/visi/"
-        "category:1002,1005,1006/"
-        "status:insales,sold_out/"
-        "order:date,asc/"
-        "page:{}/"
-        "venue:294187,45371,103680,208473,39028,39404,41503,"
-        "39103,84421,40473,39368,39220,317656,40052,47301,"
-        "45058,90741,190114,39105,45041/"
-    )
+    base_url = "https://www.bilietai.lt/en/tickets/all/page:{}/"
 
-    site_root = "https://www.bilietai.lt"
-
-    event_page_re = re.compile(r"/(?:eng|lit)/tickets/.+-\d+")
-    abs_event_page_re = re.compile(r"https?://(?:www\.)?bilietai\.lt/(?:eng|lit)/tickets/.+-\d+")
-    time_re = re.compile(r"\b(\d{1,2}:\d{2})\b")
-
-    def abs_url(href: str) -> str:
-        return urljoin(site_root, href)
-
-    def split_dt(s: str) -> tuple[str, str]:
-        if not s:
-            return "", ""
-        if "T" in s:
-            d, t = s.split("T", 1)
-            return d.strip(), t.strip()[:5]
-        return s.strip(), ""
-
-    def first_time_from_text(text: str) -> str:
-        m = time_re.search(text or "")
-        return m.group(1) if m else ""
-
-    def iter_event_jsonld(soup: BeautifulSoup):
-        for s in soup.find_all("script", type="application/ld+json"):
-            raw = s.get_text(strip=True)
-            if not raw:
-                continue
-            try:
-                data = json.loads(raw)
-            except Exception:
-                continue
-
-            objs = data if isinstance(data, list) else [data]
-            for obj in objs:
-                if isinstance(obj, dict) and obj.get("@type") == "Event":
-                    yield s, obj
-
-    def find_container_and_event_link(script_tag):
-        a = script_tag.find_parent("a", href=True)
-        if a:
-            href = a["href"]
-            if href.startswith("/") and event_page_re.search(href):
-                return a, abs_url(href)
-            if abs_event_page_re.search(href):
-                return a, href.split("#")[0]
-
-        node = script_tag
-        for _ in range(10):
-            node = node.parent
-            if not node:
-                break
-
-            links = []
-            for a2 in node.find_all("a", href=True):
-                href = a2["href"]
-                if href.startswith("/") and event_page_re.search(href):
-                    links.append(abs_url(href))
-                elif abs_event_page_re.search(href):
-                    links.append(href.split("#")[0])
-
-            uniq = list(dict.fromkeys(links))
-            if len(uniq) == 1:
-                return node, uniq[0]
-
-        return None, ""
-
-    def row_from_event(e: dict, container, event_page_link: str) -> dict:
-        start_raw = e.get("startDate", "")
-        start_date, start_time = split_dt(start_raw)
-
-        container_text = container.get_text(" ", strip=True) if container else ""
-        if not start_time:
-            start_time = first_time_from_text(container_text)
-
-        loc = e.get("location", {}) if isinstance(e.get("location"), dict) else {}
-        addr = loc.get("address", {}) if isinstance(loc.get("address"), dict) else {}
-
-        offers = e.get("offers", {}) if isinstance(e.get("offers"), dict) else {}
-        ticket_link = offers.get("url", "")
-        if isinstance(ticket_link, str) and ticket_link.startswith("/"):
-            ticket_link = abs_url(ticket_link)
-
-        return {
-            "title": e.get("name", ""),
-            "location": loc.get("name", ""),
-            "city": addr.get("addressLocality", ""),
-            "start_date": start_date,
-            "start_time": start_time,
-            "event_link": event_page_link,
-            "ticket_link": ticket_link,
-            "scraped_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        }
-
-    rows: list[dict] = []
-    series_links: set[str] = set()
-    series_fallback: dict[str, dict] = {}
-    seen_event_pages: set[str] = set()
+    rows = []
+    seen_links = set()
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-        context = await browser.new_context()
-        page = await context.new_page()
+        page = await browser.new_page()
 
-        for page_num in range(1, pages_to_check + 1):
-            url = base_url.format(page_num)
+        for i in range(1, pages_to_check + 1):
             try:
-                await page.goto(url, wait_until="networkidle", timeout=90000)
-            except Exception:
+                await page.goto(base_url.format(i), timeout=90000)
+                await page.wait_for_timeout(2000)
+            except:
                 continue
 
-            soup = BeautifulSoup(await page.content(), "html.parser")
+            links = await page.locator("a[href*='/tickets/']").evaluate_all(
+                "els => els.map(e => e.href)"
+            )
 
-            for script_tag, e in iter_event_jsonld(soup):
-                container, event_page_link = find_container_and_event_link(script_tag)
-                if not event_page_link or event_page_link in seen_event_pages:
+            for link in links:
+                if link in seen_links:
+                    continue
+                seen_links.add(link)
+
+                try:
+                    await page.goto(link, timeout=90000)
+                    await page.wait_for_timeout(1000)
+                except:
                     continue
 
-                seen_event_pages.add(event_page_link)
-                r = row_from_event(e, container, event_page_link)
+                text = await page.locator("body").inner_text()
 
-                is_series = (not r["location"]) or ("Different venues" in (container.get_text() if container else ""))
-                if is_series:
-                    series_links.add(event_page_link)
-                    series_fallback[event_page_link] = r
-                else:
-                    rows.append(r)
+                title = ""
+                try:
+                    title = await page.locator("h1").inner_text()
+                except:
+                    pass
 
-        for series_url in series_links:
-            try:
-                await page.goto(series_url, wait_until="networkidle", timeout=90000)
-            except Exception:
-                if series_url in series_fallback:
-                    rows.append(series_fallback[series_url])
-                continue
+                date_match = re.search(r"\d{4}-\d{2}-\d{2}", text)
+                time_match = re.search(r"\d{1,2}:\d{2}", text)
 
-            soup = BeautifulSoup(await page.content(), "html.parser")
-            found = False
+                rows.append({
+                    "title": title.strip(),
+                    "location": "",
+                    "city": "",
+                    "start_date": date_match.group(0) if date_match else "",
+                    "start_time": time_match.group(0) if time_match else "",
+                    "event_link": link,
+                    "ticket_link": link,
+                    "scraped_at": datetime.utcnow().isoformat() + "Z",
+                })
 
-            for script_tag, e in iter_event_jsonld(soup):
-                loc = e.get("location", {})
-                offers = e.get("offers", {})
-                if not isinstance(loc, dict) or not loc.get("name"):
-                    continue
-                if not isinstance(offers, dict) or not offers.get("url"):
-                    continue
-
-                container, link = find_container_and_event_link(script_tag)
-                if not link or link == series_url:
-                    continue
-
-                rows.append(row_from_event(e, container, link))
-                found = True
-
-            if not found and series_url in series_fallback:
-                rows.append(series_fallback[series_url])
-
-        await context.close()
         await browser.close()
 
-    return (
-        pd.DataFrame(rows)
-        .drop_duplicates(subset=["title", "start_date", "start_time", "location"])
-        .reset_index(drop=True)
-    )
-
+    return pd.DataFrame(rows).drop_duplicates()
 
 # Twinsbet Arena
-def scrape_twinsbet() -> pd.DataFrame:
+async def scrape_twinsbet() -> pd.DataFrame:
     url = "https://twinsbetarena.lt/en/events/"
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0 Safari/537.36"
-        )
-    }
-
-    resp = requests.get(url, headers=headers, timeout=30)
-    resp.raise_for_status()
-
-    soup = BeautifulSoup(resp.text, "lxml")
-    events: list[dict] = []
-
-    date_nodes = soup.find_all(string=re.compile(r"\d{4}-\d{2}-\d{2}"))
-
-    def is_valid_name_text(s: str) -> bool:
-        if not s or not s.strip():
-            return False
-        text = s.strip()
-        if "Price from" in text or "Buy a ticket" in text:
-            return False
-        if text in ("Category", "All categories", "Date"):
-            return False
-        if re.search(r"\d{4}-\d{2}-\d{2}", text):
-            return False
-        return True
-
-    for date_node in date_nodes:
-        m = re.search(r"(\d{4}-\d{2}-\d{2})", str(date_node))
-        if not m:
-            continue
-
-        date_str = m.group(1)
-        time_node = date_node.find_next(string=re.compile(r"^\s*\d{2}:\d{2}\s*$"))
-        time_str = time_node.strip() if time_node else ""
-
-        name_node = date_node.find_previous(string=is_valid_name_text)
-        event_name = " ".join(name_node.strip().split()) if name_node else ""
-
-        event_link = ""
-        link_tag = date_node.find_previous("a", href=True)
-        if link_tag:
-            event_link = requests.compat.urljoin(url, link_tag["href"])
-
-        events.append(
-            {
-                "event_name": event_name,
-                "location": "Twinsbet Arena",
-                "city": "Vilnius",
-                "date": date_str,
-                "time": time_str,
-                "event_link": event_link,
-            }
-        )
-
-    return pd.DataFrame(events).drop_duplicates().reset_index(drop=True)
-
-
-# Kakava.lt
-async def scrape_kakava_lt(scroll_rounds: int = 20) -> pd.DataFrame:
-    events: list[dict] = []
-    start_url = "https://www.kakava.lt/en/events"
+    rows = []
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-        ctx = await browser.new_context()
-        page = await ctx.new_page()
+        page = await browser.new_page()
 
-        await page.goto(start_url, wait_until="domcontentloaded", timeout=90000)
+        await page.goto(url, timeout=90000)
+        await page.wait_for_timeout(2000)
 
-        for _ in range(scroll_rounds):
+        # scroll
+        for _ in range(10):
             await page.mouse.wheel(0, 5000)
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(500)
 
-        cards = await page.query_selector_all("a[href*='/event/']")
-        for c in cards:
-            href = await c.get_attribute("href")
-            title = (await c.inner_text() or "").strip()
-            if href and title:
-                events.append({"title": title, "url": "https://www.kakava.lt" + href})
+        links = await page.locator("a[href*='/renginys/']").evaluate_all(
+            "els => els.map(e => e.href)"
+        )
 
-        await ctx.close()
+        links = list(set(links))
+
+        for link in links:
+            try:
+                await page.goto(link, timeout=90000)
+                await page.wait_for_timeout(1000)
+            except:
+                continue
+
+            text = await page.locator("body").inner_text()
+
+            title = ""
+            try:
+                title = await page.locator("h1").inner_text()
+            except:
+                pass
+
+            date_match = re.search(r"\d{4}-\d{2}-\d{2}", text)
+            time_match = re.search(r"\d{1,2}:\d{2}", text)
+
+            rows.append({
+                "event_name": title.strip(),
+                "location": "Twinsbet Arena",
+                "city": "Vilnius",
+                "date": date_match.group(0) if date_match else "",
+                "time": time_match.group(0) if time_match else "",
+                "event_link": link,
+            })
+
         await browser.close()
 
-    df = pd.DataFrame(events).drop_duplicates(subset=["url"]).reset_index(drop=True)
-    df["timestamp"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    return df
-
+    return pd.DataFrame(rows).drop_duplicates()
 
 # Šiaulių Arena
 def scrape_siauliuarena() -> pd.DataFrame:
@@ -1045,16 +886,14 @@ async def main() -> None:
     out_dir = Path("output")
 
     # Bilietai.lt
-    df_bilietai_lt = await scrape_bilietai_lt(pages_to_check=6)
+    df_bilietai_lt = await scrape_bilietai_lt()
     report_rows("df_bilietai_lt", df_bilietai_lt)
     save_df(df_bilietai_lt, out_dir / "df_bilietai_lt.csv")
-    report_saved(out_dir / "df_bilietai_lt.csv")
 
     # Twinsbet Arena
-    df_twinsbet = scrape_twinsbet()
+    df_twinsbet = await scrape_twinsbet()
     report_rows("df_twinsbet", df_twinsbet)
     save_df(df_twinsbet, out_dir / "df_twinsbet.csv")
-    report_saved(out_dir / "df_twinsbet.csv")
 
     # Kakava.lt
     df_kakava_lt = await scrape_kakava_lt(scroll_rounds=20)
