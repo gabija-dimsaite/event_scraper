@@ -895,12 +895,6 @@ async def main() -> None:
     report_rows("df_twinsbet", df_twinsbet)
     save_df(df_twinsbet, out_dir / "df_twinsbet.csv")
 
-    # Kakava.lt
-    df_kakava_lt = await scrape_kakava_lt(scroll_rounds=20)
-    report_rows("df_kakava_lt", df_kakava_lt)
-    save_df(df_kakava_lt, out_dir / "df_kakava_lt.csv")
-    report_saved(out_dir / "df_kakava_lt.csv")
-
     # Šiaulių Arena
     df_siauliuarena = scrape_siauliuarena()
     report_rows("df_siauliuarena", df_siauliuarena)
