@@ -70,12 +70,16 @@ jobs:
           find . -name "*.csv" -maxdepth 3
 
       # -----------------------
-      # Commit & Push CSV updates
+      # Commit & Push CSV updates (FIXED)
       # -----------------------
       - name: Commit CSV outputs to repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Sync with remote WITHOUT merge conflicts
+          git fetch origin
+          git reset --hard origin/main
 
           # Stage CSV files
           git add output/*.csv || true
@@ -89,8 +93,5 @@ jobs:
           # Commit changes
           git commit -m "Update CSV outputs"
 
-          # Rebase safely on latest remote
-          git pull --rebase origin main
-
-          # Push
+          # Push safely
           git push origin main
