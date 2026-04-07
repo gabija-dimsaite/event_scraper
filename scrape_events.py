@@ -952,11 +952,13 @@ async def main() -> None:
     df_bilietai_lt = scrape_bilietai_lt_api(max_pages=6)
     report_rows("df_bilietai_lt", df_bilietai_lt)
     save_df(df_bilietai_lt, out_dir / "df_bilietai_lt.csv")
+    report_saved(out_dir / "df_bilietai_lt.csv")
 
     # Twinsbet Arena
     df_twinsbet = await scrape_twinsbet()
     report_rows("df_twinsbet", df_twinsbet)
     save_df(df_twinsbet, out_dir / "df_twinsbet.csv")
+    report_saved(out_dir / "df_twinsbet.csv")
 
     # Šiaulių Arena
     df_siauliuarena = scrape_siauliuarena()
