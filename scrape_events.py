@@ -26,63 +26,126 @@ def report_saved(path: Path) -> None:
     print(f"Saved: {path.as_posix()}")
 
 # BILIETAI.LT
-async def scrape_bilietai_lt(pages_to_check: int = 6) -> pd.DataFrame:
-    base_url = "https://www.bilietai.lt/en/tickets/all/page:{}/"
+def scrape_bilietai_lt_api(max_pages: int = 6) -> pd.DataFrame:
+    BASE_URL = "https://www.bilietai.lt/api/v1/events"
+    DETAIL_URL = "https://www.bilietai.lt/api/v1/events/{}"
+
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+        "Referer": "https://www.bilietai.lt/",
+        "Origin": "https://www.bilietai.lt",
+    }
+
+    VENUES = [
+        "21-61-3876",
+        "21-61-7436",
+        "21-61-7730",
+        "21-61-2709",
+        "21-61-4751",
+        "21-61-7295",
+        "21-61-1882",
+        "21-61-2553",
+        "21-61-8097",
+        "21-61-7929", 
+    ]
+
+    def get_event_list():
+        items = []
+
+        for page in range(1, max_pages + 1):
+            params = [
+                ("language", "en"),
+                ("statuses", "ON_SALE"),
+                ("statuses", "SALE_STOPPED"),
+                ("sortBy", "date"),
+                ("sortOrder", "ASC"),
+                ("pageSize", "36"),
+                ("page", str(page)),
+            ]
+
+            for v in VENUES:
+                params.append(("venues", v))
+
+            r = requests.get(BASE_URL, params=params, headers=HEADERS)
+            data = r.json()
+
+            page_items = data.get("items", [])
+            print(f"Page {page}: {len(page_items)} events")
+
+            if not page_items:
+                break
+
+            items.extend(page_items)
+
+        return items
+
+    def get_event_details(event_id):
+        r = requests.get(
+            DETAIL_URL.format(event_id),
+            params={"language": "en"},
+            headers=HEADERS,
+        )
+        if r.status_code != 200:
+            return None
+        return r.json()
 
     rows = []
-    seen_links = set()
+    items = get_event_list()
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-        page = await browser.new_page()
+    for e in items:
+        title = e.get("title", "") or e.get("name", "")
+        title_lower = title.lower()
 
-        for i in range(1, pages_to_check + 1):
+        # 🚫 FILTERS
+        if any(k in title_lower for k in ["dovan", "parking", "abonement"]):
+            continue
+
+        event_id = e.get("id")
+        detail = get_event_details(event_id)
+
+        if not detail:
+            continue
+
+        venue = detail.get("venue", {})
+        location = venue.get("name", "")
+        city = venue.get("city", "")
+
+        start = detail.get("eventStartAt", "")
+
+        date = ""
+        time = ""
+
+        if start:
             try:
-                await page.goto(base_url.format(i), timeout=90000)
-                await page.wait_for_timeout(2000)
+                dt = datetime.fromisoformat(start.replace("Z", ""))
+                date = dt.date().isoformat()
+                time = dt.strftime("%H:%M")
             except:
-                continue
+                pass
 
-            links = await page.locator("a[href*='/tickets/']").evaluate_all(
-                "els => els.map(e => e.href)"
-            )
+        event_link = f"https://www.bilietai.lt/renginiai/{event_id}"
 
-            for link in links:
-                if link in seen_links:
-                    continue
-                seen_links.add(link)
+        rows.append(
+            {
+                "title": title,
+                "location": location,
+                "city": city,
+                "start_date": date,
+                "start_time": time,
+                "event_link": event_link,
+                "ticket_link": event_link, 
+                "scraped_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            }
+        )
 
-                try:
-                    await page.goto(link, timeout=90000)
-                    await page.wait_for_timeout(1000)
-                except:
-                    continue
+    df = pd.DataFrame(rows)
 
-                text = await page.locator("body").inner_text()
-
-                title = ""
-                try:
-                    title = await page.locator("h1").inner_text()
-                except:
-                    pass
-
-                date_match = re.search(r"\d{4}-\d{2}-\d{2}", text)
-                time_match = re.search(r"\d{1,2}:\d{2}", text)
-
-                rows.append({
-                    "title": title.strip(),
-                    "location": "",
-                    "city": "",
-                    "start_date": date_match.group(0) if date_match else "",
-                    "start_time": time_match.group(0) if time_match else "",
-                    "event_link": link,
-                    "ticket_link": link,
-                    "scraped_at": datetime.utcnow().isoformat() + "Z",
-                })
-
-        await browser.close()
-
-    return pd.DataFrame(rows).drop_duplicates()
+    return (
+        df.drop_duplicates(subset=["title", "start_date", "start_time", "location"])
+        .sort_values(["start_date", "start_time"])
+        .reset_index(drop=True)
+    )
 
 # Twinsbet Arena
 async def scrape_twinsbet() -> pd.DataFrame:
@@ -886,7 +949,7 @@ async def main() -> None:
     out_dir = Path("output")
 
     # Bilietai.lt
-    df_bilietai_lt = await scrape_bilietai_lt()
+    df_bilietai_lt = scrape_bilietai_lt_api(max_pages=6)
     report_rows("df_bilietai_lt", df_bilietai_lt)
     save_df(df_bilietai_lt, out_dir / "df_bilietai_lt.csv")
 
