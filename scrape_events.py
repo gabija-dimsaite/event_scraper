@@ -1059,7 +1059,18 @@ def scrape_litexpo() -> pd.DataFrame:
 
         dates = parse_dates(raw_date)
 
+    today = date.today()
+
         for d in dates:
+            try:
+                d_obj = datetime.fromisoformat(d).date()
+            except:
+                continue
+
+            # ✅ keep only future events
+            if d_obj < today:
+                continue
+
             rows.append({
                 "event_name": title,
                 "location": "Litexpo",
