@@ -6,11 +6,12 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
-
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup, NavigableString
 from playwright.async_api import async_playwright
+from datetime import timedelta
+from dateutil import parser
 
 
 def save_df(df: pd.DataFrame, path: Path) -> None:
@@ -945,6 +946,138 @@ def scrape_kulturosuostas_festivaliai(months_forward: int = 6) -> pd.DataFrame:
         .reset_index(drop=True)
     )
 
+# Litexpo
+def parse_dates(raw_date: str):
+    if not raw_date:
+        return []
+
+    s = raw_date.strip()
+
+    # normalize dashes
+    s = s.replace("–", "-").replace("—", "-")
+
+    # fix typos
+    s = s.replace("Nowember", "November")
+    s = s.replace("Murch", "March")
+
+    # Lithuanian → English
+    lt_months = {
+        "sausio": "January",
+        "vasario": "February",
+        "kovo": "March",
+        "balandžio": "April",
+        "gegužės": "May",
+        "birželio": "June",
+        "liepos": "July",
+        "rugpjūčio": "August",
+        "rugsėjo": "September",
+        "spalio": "October",
+        "lapkričio": "November",
+        "gruodžio": "December",
+    }
+
+    for lt, en in lt_months.items():
+        s = re.sub(lt, en, s, flags=re.IGNORECASE)
+
+    # clean
+    s = re.sub(r"\bof\b", "", s)
+    s = re.sub(r"canceled.*", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s+", " ", s).strip()
+
+    # remove artifacts
+    s = re.sub(r"\b\d{4}\s*m\.\s*", "", s)
+    s = re.sub(r"\bd\.\b", "", s)
+    s = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", s)
+
+    try:
+        # Case 1: "May 15-17, 2026"
+        m = re.match(r"([A-Za-z]+)\s+(\d{1,2})-(\d{1,2}),?\s*(\d{4})", s)
+        if m:
+            month, d1, d2, year = m.groups()
+            start = parser.parse(f"{d1} {month} {year}")
+            end = parser.parse(f"{d2} {month} {year}")
+
+        # Case 2: "15-17 May, 2026"
+        elif re.match(r"\d{1,2}-\d{1,2}", s):
+            m = re.match(r"(\d{1,2})-(\d{1,2})\s+([A-Za-z]+),?\s*(\d{4})", s)
+            if not m:
+                return []
+            d1, d2, month, year = m.groups()
+            start = parser.parse(f"{d1} {month} {year}")
+            end = parser.parse(f"{d2} {month} {year}")
+
+        # Case 3: cross-month
+        elif "-" in s:
+            m = re.match(r"([A-Za-z]+\s+\d{1,2})\s*-\s*([A-Za-z]+\s+\d{1,2}),?\s*(\d{4})", s)
+            if not m:
+                return []
+            d1_str, d2_str, year = m.groups()
+            start = parser.parse(f"{d1_str} {year}")
+            end = parser.parse(f"{d2_str} {year}")
+
+        # Single date
+        else:
+            dt = parser.parse(s, fuzzy=True)
+            return [dt.date().isoformat()]
+
+        # expand range
+        dates = []
+        current = start
+        while current <= end:
+            dates.append(current.date().isoformat())
+            current += timedelta(days=1)
+
+        return dates
+
+    except Exception:
+        return []
+
+def scrape_litexpo() -> pd.DataFrame:
+    url = "https://www.litexpo.lt/en/events/"
+    base_url = "https://www.litexpo.lt"
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    resp = requests.get(url, headers=headers, timeout=30)
+    resp.raise_for_status()
+
+    soup = BeautifulSoup(resp.content, "lxml")
+
+    rows = []
+
+    for card in soup.select(".event-wrapper"):
+        title_tag = card.select_one("h3")
+        title = title_tag.get_text(strip=True) if title_tag else ""
+
+        link_tag = card.select_one("a[href]")
+        event_link = link_tag["href"] if link_tag else ""
+        if event_link and not event_link.startswith("http"):
+            event_link = base_url + event_link
+
+        date_tag = card.select_one(".date")
+        raw_date = date_tag.get_text(strip=True) if date_tag else ""
+
+        dates = parse_dates(raw_date)
+
+        for d in dates:
+            rows.append({
+                "event_name": title,
+                "location": "Litexpo",
+                "city": "Vilnius",
+                "date": d,
+                "event_link": event_link,
+            })
+
+    df = pd.DataFrame(rows)
+
+    if df.empty:
+        return df
+
+    df = df.drop_duplicates(subset=["event_name", "date", "location"])
+    df = df.sort_values(["date"]).reset_index(drop=True)
+
+    return df
+
 async def main() -> None:
     out_dir = Path("output")
 
@@ -995,6 +1128,12 @@ async def main() -> None:
     report_rows("df_klaipeda", df_klaipeda)
     save_df(df_klaipeda, out_dir / "df_klaipeda.csv")
     report_saved(out_dir / "df_klaipeda.csv")
+
+    # Litexpo
+    df_litexpo = scrape_litexpo()
+    report_rows("df_litexpo", df_litexpo)
+    save_df(df_litexpo, out_dir / "df_litexpo.csv")
+    report_saved(out_dir / "df_litexpo.csv")
 
 
 if __name__ == "__main__":
