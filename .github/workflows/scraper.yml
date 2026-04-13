@@ -17,37 +17,49 @@ jobs:
       contents: write
 
     steps:
+      # -----------------------
       # Checkout repository
+      # -----------------------
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           persist-credentials: true
           fetch-depth: 0
 
+      # -----------------------
       # Setup Python
+      # -----------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # -----------------------
       # Install dependencies
+      # -----------------------
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # -----------------------
       # Install Playwright
+      # -----------------------
       - name: Install Playwright Chromium
         run: |
           python -m playwright install chromium
           python -m playwright install-deps
 
+      # -----------------------
       # Run scraper
+      # -----------------------
       - name: Run scraper
         run: |
           python scrape_events.py
 
-      # Debug (helps verify files exist)
+      # -----------------------
+      # Debug output (VERY useful)
+      # -----------------------
       - name: Debug output
         run: |
           echo "Repo root:"
@@ -57,7 +69,15 @@ jobs:
           echo "CSV files found:"
           find . -name "*.csv" -maxdepth 3
 
+          echo "Preview bilietai:"
+          head -n 3 output/df_bilietai_lt.csv || true
+
+          echo "Preview litexpo:"
+          head -n 3 output/df_litexpo.csv || echo "Litexpo not found"
+
+      # -----------------------
       # Commit & Push CSV updates
+      # -----------------------
       - name: Commit CSV outputs to repo
         run: |
           git config user.name "github-actions[bot]"
@@ -72,7 +92,7 @@ jobs:
           echo "Git status AFTER add:"
           git status
 
-          # If nothing changed, exit cleanly
+          # Exit if nothing changed
           if git diff --cached --quiet; then
             echo "No CSV changes to commit."
             exit 0
@@ -81,7 +101,7 @@ jobs:
           # Commit
           git commit -m "Update CSV outputs"
 
-          # Pull latest safely (no destructive reset)
+          # Pull latest safely
           git pull --rebase origin main
 
           # Push
