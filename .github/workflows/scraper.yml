@@ -17,72 +17,60 @@ jobs:
       contents: write
 
     steps:
-      # -----------------------
       # Checkout repository
-      # -----------------------
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           persist-credentials: true
           fetch-depth: 0
 
-      # -----------------------
       # Setup Python
-      # -----------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # -----------------------
       # Install dependencies
-      # -----------------------
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # -----------------------
       # Install Playwright
-      # -----------------------
       - name: Install Playwright Chromium
         run: |
           python -m playwright install chromium
           python -m playwright install-deps
 
-      # -----------------------
       # Run scraper
-      # -----------------------
       - name: Run scraper
         run: |
           python scrape_events.py
 
-      # -----------------------
-      # Debug (optional but useful)
-      # -----------------------
-      - name: Show output files (debug)
+      # Debug (helps verify files exist)
+      - name: Debug output
         run: |
           echo "Repo root:"
           ls -la
           echo "Output folder:"
           ls -la output || echo "No output directory"
-          echo "All CSV files:"
+          echo "CSV files found:"
           find . -name "*.csv" -maxdepth 3
 
-      # -----------------------
-      # Commit & Push CSV updates (FIXED)
-      # -----------------------
+      # Commit & Push CSV updates
       - name: Commit CSV outputs to repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Sync with remote WITHOUT merge conflicts
-          git fetch origin
-          git reset --hard origin/main
+          echo "Git status BEFORE add:"
+          git status
 
           # Stage CSV files
           git add output/*.csv || true
+
+          echo "Git status AFTER add:"
+          git status
 
           # If nothing changed, exit cleanly
           if git diff --cached --quiet; then
@@ -90,8 +78,11 @@ jobs:
             exit 0
           fi
 
-          # Commit changes
+          # Commit
           git commit -m "Update CSV outputs"
 
-          # Push safely
+          # Pull latest safely (no destructive reset)
+          git pull --rebase origin main
+
+          # Push
           git push origin main
