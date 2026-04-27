@@ -10,9 +10,8 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup, NavigableString
 from playwright.async_api import async_playwright
-from datetime import timedelta
+from datetime import timedelta, date
 from dateutil import parser
-
 
 def save_df(df: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1059,7 +1058,7 @@ def scrape_litexpo() -> pd.DataFrame:
 
         dates = parse_dates(raw_date)
 
-    today = date.today()
+        today = date.today()
 
         for d in dates:
             try:
