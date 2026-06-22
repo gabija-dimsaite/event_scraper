@@ -49,6 +49,7 @@ def scrape_bilietai_lt_api(max_pages: int = 6) -> pd.DataFrame:
         "21-61-8097",
         "21-61-7929",
         "21-61-2229",
+        "21-61-8981",
     ]
 
     def get_event_list():
