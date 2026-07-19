@@ -371,8 +371,7 @@ def scrape_kalnapilioarena() -> pd.DataFrame:
 
 # Švyturio Arena
 def scrape_svyturioarena() -> pd.DataFrame:
-    url = "https://www.svyturioarena.lt/en/renginiai/"
-    base_url = "https://www.svyturioarena.lt"
+    url = "https://www.svyturioarena.lt/lt/renginiai/"
 
     headers = {
         "User-Agent": (
@@ -385,72 +384,56 @@ def scrape_svyturioarena() -> pd.DataFrame:
     def norm(text):
         if not text:
             return ""
-        text = " ".join(text.split())
-        return unicodedata.normalize("NFC", text)
+        return unicodedata.normalize("NFC", " ".join(text.split()))
 
     resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
 
-    html = resp.content.decode("utf-8", errors="replace")
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(resp.content.decode("utf-8", errors="replace"), "lxml")
 
-    dt_re = re.compile(r"^\s*(\d{4}/\d{2}/\d{2})\s*/\s*(\d{1,2}:\d{2})\s*$")
-
-    def is_title_candidate(text):
-        text = norm(text)
-        if not text:
-            return False
-        if dt_re.match(text):
-            return False
-        if text.startswith("Ticket price:"):
-            return False
-        if text in ("To buy a ticket", "More"):
-            return False
-        if text.startswith("Image:"):
-            return False
-        if not any(ch.isalpha() for ch in text):
-            return False
-        if len(text) > 120:
-            return False
-        return True
+    # "2026 07 18 / 09:00"
+    date_re = re.compile(r"(\d{4})\s+(\d{2})\s+(\d{2})")
+    time_re = re.compile(r"\b(\d{1,2}:\d{2})\b")
 
     events: list[dict] = []
 
-    for node in soup.find_all(string=dt_re):
-        m = dt_re.match(node.strip())
+    for card in soup.select("div.events-item"):
+        # date + time
+        date_tag = card.select_one("div.date-text")
+        raw_date = date_tag.get_text(" ", strip=True) if date_tag else ""
+        m = date_re.search(raw_date)
         if not m:
             continue
+        year, month, day = m.groups()
+        date_str = f"{year}-{month}-{day}"
+        m2 = time_re.search(raw_date[m.end():])
+        time_str = m2.group(1) if m2 else ""
 
-        date_raw = m.group(1)
-        time_str = m.group(2)
-        date_str = date_raw.replace("/", "-")
-
-        title = None
-        for el in node.next_elements:
-            if isinstance(el, NavigableString):
-                cand = norm(el)
-                if is_title_candidate(cand):
-                    title = cand
-                    break
+        # title: first text node in div.text, ignoring "Plačiau"
+        text_tag = card.select_one("div.text")
+        title = ""
+        if text_tag:
+            for t in text_tag.stripped_strings:
+                if t.lower() == "plačiau":
+                    continue
+                title = norm(t)
+                break
 
         if not title:
             continue
 
-        event_link = ""
-        link_tag = node.find_previous("a", href=True)
-        if link_tag:
-            event_link = urljoin(base_url, link_tag["href"])
+        # event link
+        a = card.find("a", href=re.compile(r"/events/"))
+        event_link = a["href"] if a else ""
 
-        events.append(
-            {
-                "event_name": title,
-                "location": "Švyturio Arena",
-                "city": "Klaipėda",
-                "date": date_str,
-                "time": time_str,
-                "event_link": event_link,
-            }
-        )
+        events.append({
+            "event_name": title,
+            "location": "Švyturio Arena",
+            "city": "Klaipėda",
+            "date": date_str,
+            "time": time_str,
+            "event_link": event_link,
+        })
 
     return (
         pd.DataFrame(events)
@@ -460,10 +443,11 @@ def scrape_svyturioarena() -> pd.DataFrame:
 
 
 # Compensa
-def scrape_compensa(pages_to_check: int = 6) -> pd.DataFrame:
-    base_url = "https://www.compensakoncertusale.lt/events"
+def scrape_compensa(max_list_pages: int = 6) -> pd.DataFrame:
+    BASE_URL = "https://www.compensakoncertusale.lt"
+    LIST_URL = "https://www.compensakoncertusale.lt/renginiai/"
 
-    headers = {
+    HEADERS = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -477,155 +461,136 @@ def scrape_compensa(pages_to_check: int = 6) -> pd.DataFrame:
         text = " ".join(text.split())
         return unicodedata.normalize("NFC", text)
 
-    lt_months = {
-        "sau": "01",
-        "vas": "02",
-        "kov": "03",
-        "bal": "04",
-        "geg": "05",
-        "bir": "06",
-        "lie": "07",
-        "rgp": "08",
-        "rugp": "08",
-        "rug": "09",
-        "rugs": "09",
-        "spa": "10",
-        "lap": "11",
-        "gru": "12",
-    }
+    session = requests.Session()
+    session.headers.update(HEADERS)
 
-    event_re = re.compile(
-        r"(?P<title>.+?)\s+"
-        r"(?P<day>\d{1,2})\s+"
-        r"(?P<month>[A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž]{3,6})\s+"
-        r"(?P<time>\d{1,2}:\d{2})\s+"
-        r".*?(?P<link>www\.(?:bilietai|kakava|manobilietas|ticketshop|medusa)\.lt\S*)",
-        re.UNICODE,
-    )
-
-    def guess_year(month_num: int) -> int:
-        today = datetime.today().date()
-        year = today.year
-        if month_num - today.month < -6:
-            year += 1
-        return year
-
-    def clean_title(raw_title: str) -> str:
-        t = norm(raw_title)
-        t = re.sub(r"\s*\|\s*Vilnius$", "", t, flags=re.IGNORECASE)
-        t = re.sub(r"\s*\(Vilnius\)$", "", t, flags=re.IGNORECASE)
-        t = re.sub(r"\s*COMPENSA\s*$", "", t, flags=re.IGNORECASE)
-        return t.strip(" -|")
-
-    urls = [base_url] + [f"{base_url}?page={i}" for i in range(1, pages_to_check)]
-    events: list[dict] = []
-
-    for url in urls:
+    def collect_listing_links(page_url: str) -> list[str]:
         try:
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = session.get(page_url, timeout=30)
             resp.raise_for_status()
-        except Exception:
-            continue
+        except Exception as e:
+            print(f"[listing failed] {page_url}: {e}")
+            return []
 
-        html = resp.content.decode("utf-8", errors="replace")
-        soup = BeautifulSoup(html, "lxml")
-
-        event_page_links: list[str] = []
-        seen = set()
-
-        href_re = re.compile(
-            r"^(?:https?://(?:www\.)?compensakoncertusale\.lt)?(?P<path>/renginiai/[^/?#]+)(?:/)?$",
-            re.IGNORECASE,
-        )
+        soup = BeautifulSoup(resp.text, "lxml")
+        links: list[str] = []
+        seen: set[str] = set()
 
         for a in soup.find_all("a", href=True):
-            href = a["href"].strip()
-            m_href = href_re.match(href)
-            if not m_href:
-                continue
-            full = "https://www.compensakoncertusale.lt" + m_href.group("path")
-            if full in seen:
-                continue
-            seen.add(full)
-            event_page_links.append(full)
-
-        def slugify(s: str) -> str:
-            s = unicodedata.normalize("NFKD", norm(s).lower())
-            s = "".join(ch for ch in s if not unicodedata.combining(ch))
-            s = re.sub(r"[^a-z0-9]+", "-", s)
-            return re.sub(r"-+", "-", s).strip("-")
-
-        link_idx = 0
-        last_link_for_title: dict[str, str] = {}
-
-        text = soup.get_text(separator=" ", strip=True)
-        text = re.sub(r"\s+", " ", text)
-
-        idx = text.lower().find("praėję renginiai")
-        if idx != -1:
-            text = text[:idx]
-
-        for m in event_re.finditer(text):
-            raw_title = m.group("title")
-            day = int(m.group("day"))
-            month_raw = m.group("month").lower().strip(".")
-            time_str = m.group("time")
-
-            key4 = month_raw[:4]
-            key3 = month_raw[:3]
-            month_num_str = lt_months.get(key4) or lt_months.get(key3)
-            if not month_num_str:
+            href = (a.get("href") or "").strip()
+            if not href:
                 continue
 
-            month_num = int(month_num_str)
-            year = guess_year(month_num)
-            date_iso = f"{year}-{month_num_str}-{day:02d}"
+            full = urljoin(BASE_URL, href.split("#")[0].split("?")[0])
 
-            title = clean_title(raw_title)
-            if re.search(r"\brenginiai\b", title, re.IGNORECASE):
+            if "/renginiai/" not in full:
+                continue
+            if full.rstrip("/") == LIST_URL.rstrip("/"):
                 continue
 
-            ticket_link = m.group("link")
-            if not ticket_link.startswith("http"):
-                ticket_link = "https://" + ticket_link
+            if full not in seen:
+                seen.add(full)
+                links.append(full)
 
-            event_link = None
-            title_slug = slugify(title)
+        return links
 
-            for j in range(link_idx, min(link_idx + 8, len(event_page_links))):
-                if title_slug and title_slug in event_page_links[j]:
-                    event_link = event_page_links[j]
-                    link_idx = j + 1
-                    break
+    def parse_event_page(event_url: str) -> dict | None:
+        try:
+            resp = session.get(event_url, timeout=30)
+            resp.raise_for_status()
+        except Exception as e:
+            print(f"[event failed] {event_url}: {e}")
+            return None
 
-            if event_link is None and link_idx < len(event_page_links):
-                event_link = event_page_links[link_idx]
-                link_idx += 1
+        soup = BeautifulSoup(resp.text, "lxml")
+        text = soup.get_text("\n", strip=True)
 
-            if event_link is None:
-                event_link = last_link_for_title.get(title) or ticket_link
+        title = ""
+        h1 = soup.find("h1")
+        if h1:
+            title = norm(h1.get_text(" ", strip=True))
 
-            last_link_for_title[title] = event_link
+        if not title and soup.title:
+            title = norm(soup.title.get_text(" ", strip=True))
+            title = re.sub(r"\s*\|\s*Compensa.*$", "", title, flags=re.I).strip()
 
-            events.append(
-                {
-                    "event_name": title,
-                    "location": "Compensa koncertų salė",
-                    "city": "Vilnius",
-                    "date": date_iso,
-                    "time": time_str,
-                    "event_link": event_link,
-                }
-            )
+        date_str = ""
+        time_str = ""
 
-    df = pd.DataFrame(events)
+        m_date = re.search(r"Renginio data\s+(\d{4}-\d{2}-\d{2})", text, re.S)
+        if m_date:
+            date_str = m_date.group(1)
+
+        m_time = re.search(r"Renginio pradžia\s+(\d{1,2}:\d{2})", text, re.S)
+        if m_time:
+            time_str = m_time.group(1)
+
+        if not date_str or not time_str:
+            m_dt = re.search(r"(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})", text)
+            if m_dt:
+                date_str = date_str or m_dt.group(1)
+                time_str = time_str or m_dt.group(2)
+
+        if not title or not date_str:
+            return None
+
+        ticket_link = ""
+        for a in soup.find_all("a", href=True):
+            href = (a.get("href") or "").strip()
+            label = norm(a.get_text(" ", strip=True)).lower()
+
+            if label in {"bilietai", "pirkti bilietą", "pirkti bilieta"}:
+                ticket_link = urljoin(BASE_URL, href)
+                break
+
+            if any(
+                x in href.lower()
+                for x in ["bilietai.lt", "kakava.lt", "manobilietas.lt", "ticketshop", "medusa"]
+            ):
+                ticket_link = urljoin(BASE_URL, href)
+                break
+
+        if not ticket_link:
+            m = re.search(r"https?://\S+|www\.\S+", text)
+            if m:
+                ticket_link = m.group(0).rstrip(").,;]")
+                if ticket_link.startswith("www."):
+                    ticket_link = "https://" + ticket_link
+
+        return {
+            "event_name": title,
+            "location": "Compensa koncertų salė",
+            "city": "Vilnius",
+            "date": date_str,
+            "time": time_str,
+            "event_link": event_url,
+            "ticket_link": ticket_link,
+            "scraped_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        }
+
+    listing_pages = [LIST_URL] + [f"{LIST_URL}?page={i}" for i in range(1, max_list_pages)]
+
+    seen_event_urls: set[str] = set()
+    for page_url in listing_pages:
+        for event_url in collect_listing_links(page_url):
+            seen_event_urls.add(event_url)
+
+    print(f"Collected {len(seen_event_urls)} event URLs")
+
+    rows: list[dict] = []
+    for event_url in sorted(seen_event_urls):
+        record = parse_event_page(event_url)
+        if record:
+            rows.append(record)
+
+    df = pd.DataFrame(rows)
     if df.empty:
         return df
 
     return (
         df.drop_duplicates(subset=["event_name", "date", "time", "location"])
-        .sort_values(["date", "time"], ascending=[True, True])
-        .reset_index(drop=True)
+          .sort_values(["date", "time", "event_name"], na_position="last")
+          .reset_index(drop=True)
     )
 
 
@@ -1125,7 +1090,7 @@ async def main() -> None:
     report_saved(out_dir / "df_svyturioarena.csv")
 
     # Compensa
-    df_compensa = scrape_compensa(pages_to_check=6)
+    df_compensa = scrape_compensa(max_list_pages=6)
     report_rows("df_compensa", df_compensa)
     save_df(df_compensa, out_dir / "df_compensa.csv")
     report_saved(out_dir / "df_compensa.csv")
