@@ -559,7 +559,7 @@ def scrape_compensa(max_list_pages: int = 6) -> pd.DataFrame:
 
         return {
             "event_name": title,
-            "location": "Compensa koncertų salė",
+            "location": "COMPENSA koncertų salė",
             "city": "Vilnius",
             "date": date_str,
             "time": time_str,
