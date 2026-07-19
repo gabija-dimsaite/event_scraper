@@ -193,7 +193,7 @@ async def scrape_twinsbet() -> pd.DataFrame:
 
             rows.append({
                 "event_name": title.strip(),
-                "location": "Twinsbet Arena",
+                "location": "Arena Vilnius",
                 "city": "Vilnius",
                 "date": date_match.group(0) if date_match else "",
                 "time": time_match.group(0) if time_match else "",
